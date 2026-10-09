@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>星空 · 许愿</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC",
+                 "Helvetica Neue", "Microsoft YaHei", sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* ---------- 夜空画布 ---------- */
+  #sky {
+    position: fixed;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(ellipse 120% 80% at 72% 6%, #070b18 0%, #03040a 45%, #000 100%);
+    z-index: 0;
+  }
+
+  /* ---------- 顶部标题 ---------- */
+  .header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    padding: calc(26px + env(safe-area-inset-top)) 24px 0;
+    text-align: center;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .header h1 {
+    font-size: 21px;
+    font-weight: 300;
+    letter-spacing: 8px;
+    text-indent: 8px;
+    color: #fff;
+    text-shadow: 0 0 14px rgba(165, 205, 255, .9),
+                 0 0 34px rgba(110, 165, 255, .55),
+                 0 0 70px rgba(80, 140, 255, .35);
+  }
+  .header p {
+    margin-top: 10px;
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: rgba(255, 255, 255, .42);
+  }
+
+  /* ---------- 随机许愿文字层 ---------- */
+  .wish-layer {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  /* 每一条愿望的定位容器（随机位置） */
+  .wish-item {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    max-width: 66vw;
+    display: flex;
+    justify-content: center;
+  }
+
+  /* 星星 + 文字 的整体组合，负责进出场动画 */
+  .wish-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    opacity: 0;
+    animation: wishIn .95s cubic-bezier(.2, .75, .3, 1) forwards;
+  }
+
+  @keyframes wishIn {
+    0%   { opacity: 0; transform: scale(.58); filter: blur(10px); }
+    55%  { opacity: 1; }
+    100% { opacity: 1; transform: scale(1);   filter: blur(0); }
+  }
+
+  .wish-group.out {
+    animation: wishOut 1.6s ease forwards;
+  }
+
+  @keyframes wishOut {
+    0%   { opacity: 1; transform: scale(1);    filter: blur(0); }
+    100% { opacity: 0; transform: scale(1.18); filter: blur(6px); }
+  }
+
+  /* ---------- 闪亮星星（已缩小） ---------- */
+  .wish-star {
+    width: 22px;          /* ★ 由 40px 缩小到 22px */
+    height: 22px;
+    flex: 0 0 auto;
+    animation: starPulse 2.1s ease-in-out infinite;
+    filter: drop-shadow(0 0 4px rgba(255, 255, 255, .95))
+            drop-shadow(0 0 11px rgba(170, 210, 255, .85))
+            drop-shadow(0 0 24px rgba(110, 165, 255, .6));
+  }
+  .wish-star svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    animation: starSpin 8s linear infinite;
+  }
+  .wish-star svg circle {
+    filter: blur(6px);
+  }
+
+  @keyframes starPulse {
+    0%, 100% { transform: scale(1);    opacity: 1; }
+    50%      { transform: scale(1.28); opacity: .82; }
+  }
+
+  @keyframes starSpin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+
+  /* ---------- 许愿文字 ---------- */
+  .wish-text {
+    max-width: 100%;
+    text-align: center;
+    font-size: clamp(15px, 4.3vw, 21px);
+    font-weight: 300;
+    letter-spacing: 2px;
+    line-height: 1.5;
+    color: #fff;
+    word-break: break-word;
+    text-shadow: 0 0 10px rgba(200, 228, 255, .95),
+                 0 0 24px rgba(130, 180, 255, .8),
+                 0 0 52px rgba(90, 150, 255, .55);
+  }
+
+  /* ---------- 底部输入栏 ---------- */
+  .wish-bar {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+    background: linear-gradient(to top, rgba(0, 0, 0, .82) 30%, rgba(0, 0, 0, 0));
+    z-index: 20;
+  }
+  #wishInput {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 46px;
+    padding: 0 18px;
+    border-radius: 23px;
+    border: 1px solid rgba(255, 255, 255, .22);
+    background: rgba(255, 255, 255, .07);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    color: #fff;
+    font-size: 15px;
+    font-family: inherit;
+    letter-spacing: 1px;
+    outline: none;
+    transition: border-color .25s, background .25s, box-shadow .25s;
+  }
+  #wishInput::placeholder {
+    color: rgba(255, 255, 255, .38);
+    letter-spacing: 1px;
+  }
+  #wishInput:focus {
+    border-color: rgba(160, 200, 255, .7);
+    background: rgba(255, 255, 255, .13);
+    box-shadow: 0 0 20px rgba(120, 170, 255, .45);
+  }
+  #sendBtn {
+    flex: 0 0 auto;
+    width: 46px;
+    height: 46px;
+    border: none;
+    border-radius: 50%;
+    background: #fff;
+    color: #05070f;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    box-shadow: 0 0 16px rgba(255, 255, 255, .65),
+                0 0 40px rgba(140, 180, 255, .5);
+    transition: transform .16s ease, box-shadow .25s ease;
+  }
+  #sendBtn:active {
+    transform: scale(.88);
+    box-shadow: 0 0 24px rgba(255, 255, 255, .95),
+                0 0 60px rgba(140, 180, 255, .8);
+  }
+  #sendBtn svg {
+    width: 21px;
+    height: 21px;
+    display: block;
+    transform: translateX(-1px);
+  }
+
+  /* ---------- 提示浮层 ---------- */
+  .toast {
+    position: fixed;
+    left: 50%;
+    top: calc(16% + env(safe-area-inset-top));
+    transform: translate(-50%, -12px);
+    padding: 10px 22px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .1);
+    border: 1px solid rgba(255, 255, 255, .26);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    color: #fff;
+    font-size: 13px;
+    letter-spacing: 1px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 30;
+    transition: opacity .35s ease, transform .35s ease;
+    box-shadow: 0 0 24px rgba(130, 175, 255, .35);
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+</style>
+</head>
+<body>
+
+  <!-- 夜空画布 -->
+  <canvas id="sky"></canvas>
+
+  <!-- 顶部标题 -->
+  <div class="header">
+    <h1>星空 · 许愿</h1>
+    <p>点击夜空，让流星更多</p>
+  </div>
+
+  <!-- 随机许愿文字层 -->
+  <div class="wish-layer" id="wishLayer"></div>
+
+  <!-- 底部输入栏 -->
+  <form class="wish-bar" id="wishForm" autocomplete="off">
+    <input id="wishInput" type="text" placeholder="写下你的愿望…" maxlength="30"
+           enterkeyhint="send" aria-label="写下你的愿望">
+    <button id="sendBtn" type="submit" aria-label="放飞愿望">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+      </svg>
+    </button>
+  </form>
+
+  <!-- 提示 -->
+  <div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* =========================================================
+     1. 基础设置
+     ========================================================= */
+  const canvas = document.getElementById('sky');
+  const ctx = canvas.getContext('2d');
+  const DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+  let W = 0, H = 0;
+
+  // 流星飞行方向：右上方 → 左下方（单位向量）
+  const DIR_X = -0.85;
+  const DIR_Y = 0.53;
+
+  let stars = [];
+  let meteors = [];
+
+  /* =========================================================
+     2. 尺寸自适应
+     ========================================================= */
+  function resize() {
+    W = window.innerWidth;
+    H = window.innerHeight;
+
+    canvas.width  = Math.floor(W * DPR);
+    canvas.height = Math.floor(H * DPR);
+    canvas.style.width  = W + 'px';
+    canvas.style.height = H + 'px';
+
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+    buildStars();
+  }
+
+  /* =========================================================
+     3. 背景星辰
+     ========================================================= */
+  function buildStars() {
+    const count = Math.min(Math.round((W * H) / 3600), 520);
+    stars = [];
+    for (let i = 0; i < count; i++) {
+      stars.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        r: Math.random() * 1.05 + 0.25,
+        a: Math.random() * 0.55 + 0.25,
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.5 + Math.random() * 1.6
+      });
+    }
+  }
+
+  function drawStars(t) {
+    for (let i = 0; i < stars.length; i++) {
+      const s = stars[i];
+      const twinkle = 0.55 + 0.45 * Math.sin(t * s.speed + s.phase);
+      const alpha = s.a * twinkle;
+
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,' + alpha.toFixed(3) + ')';
+      ctx.fill();
+    }
+  }
+
+  /* =========================================================
+     4. 流星
+     ========================================================= */
+  function spawnMeteor(opt) {
+    opt = opt || {};
+    if (meteors.length > 160) return;
+
+    const speed = opt.speed !== undefined ? opt.speed : (5 + Math.random() * 7);
+    const len   = opt.len   !== undefined ? opt.len   : (100 + Math.random() * 240);
+    const life  = opt.life  !== undefined ? opt.life  : (58 + Math.random() * 72);
+
+    const x = opt.x !== undefined
+      ? opt.x
+      : W * (0.15 + Math.random() * 1.05);
+
+    const y = opt.y !== undefined
+      ? opt.y
+      : -H * 0.20 + Math.random() * H * 0.36;
+
+    meteors.push({
+      x: x,
+      y: y,
+      vx: DIR_X * speed,
+      vy: DIR_Y * speed,
+      len: len,
+      life: 0,
+      maxLife: life,
+      width: 1 + Math.random() * 1.5,
+      alpha: 0
+    });
+  }
+
+  function updateMeteors(dt) {
+    for (let i = meteors.length - 1; i >= 0; i--) {
+      const m = meteors[i];
+
+      m.x += m.vx * dt;
+      m.y += m.vy * dt;
+      m.life += dt;
+
+      const p = m.life / m.maxLife;
+
+      if (p >= 1 || m.x < -400 || m.y > H + 400) {
+        meteors.splice(i, 1);
+        continue;
+      }
+
+      if (p < 0.12) {
+        m.alpha = p / 0.12;
+      } else if (p > 0.72) {
+        m.alpha = (1 - p) / 0.28;
+      } else {
+        m.alpha = 1;
+      }
+    }
+  }
+
+  function drawMeteors() {
+    ctx.lineCap = 'round';
+
+    for (let i = 0; i < meteors.length; i++) {
+      const m = meteors[i];
+      if (m.alpha <= 0.01) continue;
+
+      const tx = m.x - DIR_X * m.len;
+      const ty = m.y - DIR_Y * m.len;
+
+      const grad = ctx.createLinearGradient(m.x, m.y, tx, ty);
+      grad.addColorStop(0,    'rgba(255,255,255,' + (m.alpha * 0.95).toFixed(3) + ')');
+      grad.addColorStop(0.25, 'rgba(205,228,255,' + (m.alpha * 0.45).toFixed(3) + ')');
+      grad.addColorStop(0.65, 'rgba(170,205,255,' + (m.alpha * 0.14).toFixed(3) + ')');
+      grad.addColorStop(1,    'rgba(150,190,255,0)');
+
+      ctx.beginPath();
+      ctx.moveTo(m.x, m.y);
+      ctx.lineTo(tx, ty);
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = m.width;
+      ctx.stroke();
+
+      const haloR = m.width * 7;
+      const halo = ctx.createRadialGradient(m.x, m.y, 0, m.x, m.y, haloR);
+      halo.addColorStop(0,   'rgba(255,255,255,' + m.alpha.toFixed(3) + ')');
+      halo.addColorStop(0.25,'rgba(200,228,255,' + (m.alpha * 0.45).toFixed(3) + ')');
+      halo.addColorStop(1,   'rgba(160,200,255,0)');
+
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, haloR, 0, Math.PI * 2);
+      ctx.fillStyle = halo;
+      ctx.fill();
+    }
+  }
+
+  /* =========================================================
+     5. 自动流星雨节奏
+     ========================================================= */
+  let spawnTimer = 0;
+
+  function autoSpawn(dt) {
+    spawnTimer -= dt;
+    if (spawnTimer <= 0) {
+      spawnMeteor();
+      if (Math.random() < 0.22) {
+        setTimeout(function () { spawnMeteor(); }, 120);
+      }
+      spawnTimer = 16 + Math.random() * 42;
+    }
+  }
+
+  /* =========================================================
+     6. 主循环
+     ========================================================= */
+  let lastTime = performance.now();
+
+  function loop(now) {
+    let dt = (now - lastTime) / 16.667;
+    lastTime = now;
+    if (dt > 3) dt = 3;
+    if (dt < 0) dt = 0;
+
+    ctx.clearRect(0, 0, W, H);
+
+    drawStars(now / 1000);
+    autoSpawn(dt);
+    updateMeteors(dt);
+    drawMeteors();
+
+    requestAnimationFrame(loop);
+  }
+
+  /* =========================================================
+     7. 点击夜空 → 更多流星
+     ========================================================= */
+  canvas.addEventListener('pointerdown', function (e) {
+    const n = 5 + Math.floor(Math.random() * 5);
+
+    for (let i = 0; i < n; i++) {
+      (function (idx) {
+        setTimeout(function () {
+          const d = 100 + Math.random() * 420;
+          spawnMeteor({
+            x: e.clientX + 0.85 * d,
+            y: e.clientY - 0.53 * d,
+            speed: 8 + Math.random() * 8,
+            len: 120 + Math.random() * 220
+          });
+        }, idx * 55);
+      })(i);
+    }
+  }, { passive: true });
+
+  /* =========================================================
+     8. 许愿功能（随机位置 + 彼此避开 + 15 秒）
+     ========================================================= */
+  const wishLayer = document.getElementById('wishLayer');
+  const wishForm  = document.getElementById('wishForm');
+  const wishInput = document.getElementById('wishInput');
+  const toastEl   = document.getElementById('toast');
+
+  const MAX_WISHES = 6;         // 同屏最多同时存在几条
+  const WISH_KEEP   = 15000;    // ★ 每条愿望持续 15 秒
+
+  const wishes = [];
+
+  /* ---- 提示浮层 ---- */
+  let toastTimer = null;
+  function showToast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () {
+      toastEl.classList.remove('show');
+    }, 1900);
+  }
+
+  /* ---- 星星 SVG ---- */
+  const STAR_SVG =
+    '<svg viewBox="0 0 100 100" aria-hidden="true">' +
+      '<circle cx="50" cy="50" r="44" fill="#a9cdff" opacity="0.30"/>' +
+      '<path d="M50 2 Q55 45 98 50 Q55 55 50 98 Q45 55 2 50 Q45 45 50 2 Z" fill="#ffffff"/>' +
+    '</svg>';
+
+  /* ---- 随机位置：避开标题 / 输入栏，且与已有愿望保持间距 ---- */
+  const SAFE_LEFT   = 18;   // 水平安全范围 %
+  const SAFE_RIGHT  = 82;
+  const SAFE_TOP    = 22;   // 垂直安全范围 %
+  const SAFE_BOTTOM = 72;
+
+  const MIN_GAP_X = 24;     // 与已有愿望的最小水平间距（%）
+  const MIN_GAP_Y = 18;     // 与已有愿望的最小垂直间距（%）
+
+  function randomSpot() {
+    let best = null;
+    let bestScore = -1;
+
+    // 尝试多次，取“最空”的那个位置
+    for (let attempt = 0; attempt < 24; attempt++) {
+      const x = SAFE_LEFT + Math.random() * (SAFE_RIGHT - SAFE_LEFT);
+      const y = SAFE_TOP  + Math.random() * (SAFE_BOTTOM - SAFE_TOP);
+
+      // 计算与所有现有愿望的最小归一化距离
+      let minDist = Infinity;
+      for (let i = 0; i < wishes.length; i++) {
+        const w = wishes[i];
+        if (!w.spot) continue;
+        const dx = (x - w.spot.x) / MIN_GAP_X;
+        const dy = (y - w.spot.y) / MIN_GAP_Y;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d < minDist) minDist = d;
+      }
+
+      // 没有其他愿望时，直接采用
+      if (minDist === Infinity) {
+        return { x: x, y: y };
+      }
+
+      // 找到一个足够远的位置，直接采用
+      if (minDist >= 1) {
+        return { x: x, y: y };
+      }
+
+      // 否则记录当前“最远”的位置作为兜底
+      if (minDist > bestScore) {
+        bestScore = minDist;
+        best = { x: x, y: y };
+      }
+    }
+
+    return best || { x: 50, y: 45 };
+  }
+
+  /* ---- 添加一条愿望 ---- */
+  function addWish(text) {
+    const spot = randomSpot();
+
+    const item = document.createElement('div');
+    item.className = 'wish-item';
+    item.style.left = spot.x + '%';
+    item.style.top  = spot.y + '%';
+
+    const group = document.createElement('div');
+    group.className = 'wish-group';
+
+    const star = document.createElement('div');
+    star.className = 'wish-star';
+    star.innerHTML = STAR_SVG;
+
+    const textEl = document.createElement('div');
+    textEl.className = 'wish-text';
+    textEl.textContent = text;
+
+    group.appendChild(star);
+    group.appendChild(textEl);
+    item.appendChild(group);
+    wishLayer.appendChild(item);
+
+    const record = { el: item, group: group, spot: spot };
+    wishes.push(record);
+
+    // 超出上限 → 最早的一条先退场
+    while (wishes.length > MAX_WISHES) {
+      removeWish(wishes.shift());
+    }
+
+    // ★ 15 秒后自动淡出
+    record.timer = setTimeout(function () {
+      const idx = wishes.indexOf(record);
+      if (idx > -1) {
+        wishes.splice(idx, 1);
+        removeWish(record);
+      }
+    }, WISH_KEEP);
+
+    return record;
+  }
+
+  /* ---- 移除一条愿望 ---- */
+  function removeWish(record) {
+    if (!record || !record.el) return;
+    if (record.timer) {
+      clearTimeout(record.timer);
+      record.timer = null;
+    }
+    record.group.classList.add('out');
+    setTimeout(function () {
+      if (record.el && record.el.parentNode) {
+        record.el.parentNode.removeChild(record.el);
+      }
+    }, 1700);
+  }
+
+  /* ---- 放飞时来一波流星助兴 ---- */
+  function burstMeteors() {
+    for (let i = 0; i < 12; i++) {
+      (function (idx) {
+        setTimeout(function () {
+          spawnMeteor({
+            speed: 9 + Math.random() * 8,
+            len: 140 + Math.random() * 240
+          });
+        }, idx * 75);
+      })(i);
+    }
+  }
+
+  /* ---- 提交表单 ---- */
+  wishForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    const text = wishInput.value.trim();
+
+    if (!text) {
+      showToast('先写下愿望，再放飞吧 ✨');
+      wishInput.focus();
+      return;
+    }
+
+    addWish(text);
+    wishInput.value = '';
+    wishInput.blur();
+
+    burstMeteors();
+    showToast('愿望已随流星飞去 ✨');
+  });
+
+  /* =========================================================
+     9. 启动
+     ========================================================= */
+  window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', function () {
+    setTimeout(resize, 220);
+  });
+
+  resize();
+  for (let i = 0; i < 4; i++) {
+    (function (idx) {
+      setTimeout(function () { spawnMeteor(); }, idx * 320);
+    })(i);
+  }
+  requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
